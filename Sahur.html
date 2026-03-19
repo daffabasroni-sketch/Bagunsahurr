@@ -1,0 +1,715 @@
+DOCTYPE html><!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sahur Simulator 3D - Mobile Edition</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* Mencegah layar ter-scroll di HP */
+            user-select: none;
+        }
+        #game-canvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        
+        /* UI HUD (Heads Up Display) */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: none;
+            z-index: 5;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 8px; height: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px rgba(0,0,0,1);
+        }
+        .hud-text {
+            position: absolute;
+            color: #fff;
+            text-shadow: 2px 2px 4px #000, 0 0 10px rgba(255,150,0,0.8);
+            font-size: 20px;
+            font-weight: bold;
+            padding: 15px;
+            pointer-events: none;
+        }
+        #score-display { top: 10px; left: 10px; }
+        #timer-display { top: 10px; right: 10px; }
+        
+        /* Kontrol Layar Sentuh */
+        #touch-controls {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+        }
+        /* Area Joystick */
+        #joystick-zone {
+            position: absolute;
+            bottom: 30px; left: 30px;
+            width: 120px; height: 120px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: auto;
+        }
+        #joystick-stick {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 50px; height: 50px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        /* Area Lihat Sekeliling (Kanan Layar) */
+        #look-zone {
+            position: absolute;
+            top: 0; right: 0;
+            width: 50vw; height: 100vh;
+            pointer-events: auto;
+        }
+        /* Tombol Pukul */
+        #hit-btn {
+            position: absolute;
+            bottom: 40px; right: 40px;
+            width: 90px; height: 90px;
+            background: radial-gradient(circle, #f39c12, #d35400);
+            border: 3px solid #fff;
+            border-radius: 50%;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px #000;
+            pointer-events: auto;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            line-height: 1.2;
+            transition: transform 0.1s;
+        }
+        #hit-btn:active {
+            transform: scale(0.9);
+            background: radial-gradient(circle, #e67e22, #c0392b);
+        }
+
+        /* Menu Layar */
+        .menu-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 20, 40, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 20;
+        }
+        h1 { font-size: 3rem; margin-bottom: 10px; text-shadow: 0 0 15px #f39c12; text-align: center;}
+        p { font-size: 1.1rem; margin-bottom: 30px; text-align: center; max-width: 90%; line-height: 1.5; color: #ddd;}
+        .btn {
+            background: linear-gradient(45deg, #e67e22, #f1c40f);
+            color: #000;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(243, 156, 18, 0.5);
+            pointer-events: auto;
+        }
+        .btn:active { transform: scale(0.95); }
+        .hidden { display: none !important; }
+
+        #wake-noti {
+            position: absolute;
+            top: 60%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #2ecc71;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 8px #000, 0 0 10px rgba(46, 204, 113, 0.8);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+    </style>
+    <!-- Tiga.js untuk grafis 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <!-- Layar Awal -->
+    <div id="start-screen" class="menu-screen">
+        <h1>🌙 SAHUR 3D</h1>
+        <p><b>Cara Main di HP:</b><br>
+        🕹️ Kiri bawah = Joystick untuk Berjalan<br>
+        👆 Kanan layar = Geser untuk Melihat Sekitar<br>
+        🥁 Tombol Kanan Bawah = Pukul Beduk/Kentongan di depan rumah gelap!</p>
+        <button class="btn" id="start-btn">MULAI KELILING</button>
+    </div>
+
+    <!-- Layar Selesai -->
+    <div id="game-over-screen" class="menu-screen hidden">
+        <h1>Waktu Imsak! 🕌</h1>
+        <p id="final-stats">Kamu membangunkan 0 rumah warga.</p>
+        <button class="btn" id="restart-btn">MAIN LAGI</button>
+    </div>
+
+    <!-- UI Overlay (Skor & Waktu) -->
+    <div id="ui-layer">
+        <div id="crosshair"></div>
+        <div id="score-display" class="hud-text">Warga: 0</div>
+        <div id="timer-display" class="hud-text">Imsak: 60s</div>
+        <div id="wake-noti">Warga Bangun! +1</div>
+    </div>
+
+    <!-- Kontrol Touchscreen -->
+    <div id="touch-controls">
+        <div id="joystick-zone">
+            <div id="joystick-stick"></div>
+        </div>
+        <div id="look-zone"></div>
+        <div id="hit-btn">PUKUL<br>BEDUK</div>
+    </div>
+
+    <!-- Canvas 3D -->
+    <canvas id="game-canvas"></canvas>
+
+<script>
+    // --- SISTEM SUARA (Tanpa perlu download MP3) ---
+    const AudioSys = {
+        ctx: null,
+        init: function() {
+            window.AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+            this.playAmbient();
+        },
+        playHit: function() {
+            if(!this.ctx) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            
+            // Suara Kentongan/Beduk
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(300, t);
+            osc.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+            
+            gain.gain.setValueAtTime(1.5, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.25);
+        },
+        playAmbient: function() {
+            if(!this.ctx) return;
+            // Suara malam pelan
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = 4000;
+            gain.gain.value = 0.01;
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+        }
+    };
+
+    // --- VARIABEL GAME ---
+    let scene, camera, renderer;
+    let prevTime = performance.now();
+    
+    // Variabel Kontrol Layar Sentuh
+    let joyX = 0, joyY = 0; // -1 sampai 1
+    let isLooking = false;
+    let lookStartX = 0, lookStartY = 0;
+    let cameraRotX = 0, cameraRotY = 0;
+
+    let score = 0;
+    let timeLeft = 60;
+    let gameActive = false;
+    let timerInterval;
+    let houses = [];
+    let npcs = [];
+    
+    // Alat (Beduk/Kentongan)
+    let alatGroup;
+    let isHitting = false;
+    let hitAnimationProgress = 0;
+    let headBobTimer = 0;
+
+    // Elemen DOM
+    const canvas = document.getElementById('game-canvas');
+    const uiLayer = document.getElementById('ui-layer');
+    const touchControls = document.getElementById('touch-controls');
+    const scoreText = document.getElementById('score-display');
+    const timerText = document.getElementById('timer-display');
+    const wakeNoti = document.getElementById('wake-noti');
+    
+    const joyZone = document.getElementById('joystick-zone');
+    const joyStick = document.getElementById('joystick-stick');
+    const lookZone = document.getElementById('look-zone');
+    const hitBtn = document.getElementById('hit-btn');
+
+    // --- SETUP TIGA.JS ---
+    function init3D() {
+        scene = new THREE.Scene();
+        // Langit malam yang lebih terang (Twilight Blue)
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.01); 
+
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.6, 80);
+        camera.rotation.order = "YXZ";
+
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+
+        // --- PENCAHAYAAN (Lebih Terang!) ---
+        const ambientLight = new THREE.AmbientLight(0x404060, 1.5); // Cahaya lingkungan ditingkatkan
+        scene.add(ambientLight);
+
+        const moonLight = new THREE.DirectionalLight(0xaabbff, 1.0); // Cahaya bulan terang
+        moonLight.position.set(50, 100, 50);
+        moonLight.castShadow = true;
+        scene.add(moonLight);
+
+        buildWorld();
+        createTool();
+        setupTouchControls(); // Panggil setup kontrol mobile
+        setupKeyboardControls(); // Tetap bisa pakai keyboard jika di PC
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    }
+
+    function buildWorld() {
+        // Material Jalan & Rumput
+        const ashpaltMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+        const grassMat = new THREE.MeshStandardMaterial({ color: 0x113311, roughness: 1 });
+        const concreteMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 });
+
+        // Jalanan
+        const roadGeo = new THREE.PlaneGeometry(20, 200);
+        const road = new THREE.Mesh(roadGeo, ashpaltMat);
+        road.rotation.x = -Math.PI / 2;
+        road.receiveShadow = true;
+        scene.add(road);
+
+        // Rumput
+        const groundGeo = new THREE.PlaneGeometry(200, 200);
+        const ground = new THREE.Mesh(groundGeo, grassMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.05;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Trotoar
+        const swGeo = new THREE.BoxGeometry(4, 0.2, 200);
+        const swLeft = new THREE.Mesh(swGeo, concreteMat);
+        swLeft.position.set(-12, 0.1, 0);
+        scene.add(swLeft);
+        const swRight = new THREE.Mesh(swGeo, concreteMat);
+        swRight.position.set(12, 0.1, 0);
+        scene.add(swRight);
+
+        // Membuat Rumah dan Lampu Jalan
+        const houseGeo = new THREE.BoxGeometry(10, 8, 12);
+        const roofGeo = new THREE.ConeGeometry(8, 5, 4);
+        roofGeo.rotateY(Math.PI / 4);
+        const roofMat = new THREE.MeshStandardMaterial({ color: 0x5c2a21 });
+        const wallColors = [0xdddddd, 0xe2c792, 0x95a5a6, 0xbdc3c7];
+
+        for (let z = -80; z <= 80; z += 25) {
+            // Sisi Kiri dan Kanan Jalan
+            [-18, 18].forEach(x => {
+                // Rumah
+                const wallMat = new THREE.MeshStandardMaterial({ color: wallColors[Math.floor(Math.random()*wallColors.length)] });
+                const house = new THREE.Mesh(houseGeo, wallMat);
+                house.position.set(x, 4, z);
+                house.castShadow = true;
+                scene.add(house);
+
+                // Atap
+                const roof = new THREE.Mesh(roofGeo, roofMat);
+                roof.position.set(x, 10.5, z);
+                scene.add(roof);
+
+                // Jendela (Indikator Bangun/Tidur)
+                const winGeo = new THREE.PlaneGeometry(4, 3);
+                const winMatOff = new THREE.MeshStandardMaterial({ color: 0x111111 });
+                const winMatOn = new THREE.MeshBasicMaterial({ color: 0xffff88 }); // Menyala terang tanpa terpengaruh bayangan
+                
+                const windowMesh = new THREE.Mesh(winGeo, winMatOff);
+                windowMesh.position.set(x > 0 ? x - 5.1 : x + 5.1, 4, z);
+                windowMesh.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
+                scene.add(windowMesh);
+
+                houses.push({ mesh: house, window: windowMesh, matOff: winMatOff, matOn: winMatOn, isAwake: false, position: new THREE.Vector3(x, 0, z) });
+            });
+
+            // Lampu Jalan (Dibuat Sangat Terang dan Jelas)
+            if (z % 40 === 0) {
+                [-13, 13].forEach(lx => {
+                    // Tiang
+                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 8), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+                    pole.position.set(lx, 4, z);
+                    scene.add(pole);
+
+                    // Bohlam Bersinar
+                    const bulbGeo = new THREE.SphereGeometry(0.6);
+                    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffeebb });
+                    const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+                    bulb.position.set(lx > 0 ? lx-1 : lx+1, 8, z);
+                    scene.add(bulb);
+
+                    // Cahaya Lampu
+                    const light = new THREE.PointLight(0xffddaa, 1.5, 40);
+                    light.position.copy(bulb.position);
+                    light.position.y -= 0.5; // Turunkan sedikit agar menyorot jalan
+                    light.castShadow = true;
+                    scene.add(light);
+                });
+            }
+        }
+    }
+
+    function createTool() {
+        alatGroup = new THREE.Group();
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+        
+        // Beduk Mini / Kentongan
+        const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.6), woodMat);
+        tube.rotation.x = Math.PI/2;
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5), woodMat);
+        stick.position.set(0.25, 0.1, 0);
+        stick.rotation.z = Math.PI / 4;
+
+        alatGroup.add(tube);
+        alatGroup.add(stick);
+
+        // Posisi alat di layar (Kanan Bawah)
+        alatGroup.position.set(0.4, -0.3, -0.6);
+        alatGroup.rotation.set(0.2, -0.5, 0);
+        camera.add(alatGroup);
+        scene.add(camera);
+    }
+
+    // --- KONTROL VIRTUAL (TOUCHSCREEN) ---
+    function setupTouchControls() {
+        // 1. Logika Joystick
+        const maxRadius = 60; // Setengah dari lebar #joystick-zone
+        let joyActive = false;
+        let joyCenterX = 0, joyCenterY = 0;
+
+        joyZone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            joyActive = true;
+            const rect = joyZone.getBoundingClientRect();
+            joyCenterX = rect.left + rect.width / 2;
+            joyCenterY = rect.top + rect.height / 2;
+            updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+
+        joyZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if(joyActive) updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+
+        const resetJoystick = () => {
+            joyActive = false;
+            joyX = 0; joyY = 0;
+            joyStick.style.transform = `translate(-50%, -50%)`;
+        };
+        joyZone.addEventListener('touchend', resetJoystick);
+        joyZone.addEventListener('touchcancel', resetJoystick);
+
+        function updateJoystick(clientX, clientY) {
+            let dx = clientX - joyCenterX;
+            let dy = clientY - joyCenterY;
+            const distance = Math.sqrt(dx*dx + dy*dy);
+            
+            // Batasi pergerakan stick di dalam lingkaran
+            if(distance > maxRadius) {
+                dx = (dx / distance) * maxRadius;
+                dy = (dy / distance) * maxRadius;
+            }
+            
+            joyStick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            
+            // Normalisasi nilai (-1 sampai 1) untuk kecepatan
+            joyX = dx / maxRadius;
+            joyY = dy / maxRadius;
+        }
+
+        // 2. Logika Melihat Sekitar (Swipe Kanan Layar)
+        lookZone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isLooking = true;
+            lookStartX = e.touches[0].clientX;
+            lookStartY = e.touches[0].clientY;
+        }, {passive: false});
+
+        lookZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if(!isLooking || !gameActive) return;
+            
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
+            const deltaX = currentX - lookStartX;
+            const deltaY = currentY - lookStartY;
+            
+            const sensitivity = 0.005;
+            camera.rotation.y -= deltaX * sensitivity;
+            
+            // Batasi melihat ke atas/bawah
+            camera.rotation.x -= deltaY * sensitivity;
+            camera.rotation.x = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, camera.rotation.x));
+            
+            lookStartX = currentX;
+            lookStartY = currentY;
+        }, {passive: false});
+
+        lookZone.addEventListener('touchend', () => { isLooking = false; });
+        lookZone.addEventListener('touchcancel', () => { isLooking = false; });
+
+        // 3. Tombol Pukul
+        hitBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            hitAction();
+        });
+        hitBtn.addEventListener('mousedown', hitAction); // Untuk tes di PC
+    }
+
+    // Fallback Keyboard untuk testing di PC
+    let keys = { w: false, a: false, s: false, d: false };
+    function setupKeyboardControls() {
+        document.addEventListener('keydown', (e) => {
+            if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
+            if(e.key==='s' || e.key==='ArrowDown') keys.s = true;
+            if(e.key==='a' || e.key==='ArrowLeft') keys.a = true;
+            if(e.key==='d' || e.key==='ArrowRight') keys.d = true;
+            if(e.key===' ') hitAction();
+        });
+        document.addEventListener('keyup', (e) => {
+            if(e.key==='w' || e.key==='ArrowUp') keys.w = false;
+            if(e.key==='s' || e.key==='ArrowDown') keys.s = false;
+            if(e.key==='a' || e.key==='ArrowLeft') keys.a = false;
+            if(e.key==='d' || e.key==='ArrowRight') keys.d = false;
+        });
+    }
+
+    // --- MEKANIK GAME ---
+    function hitAction() {
+        if(!gameActive || isHitting) return;
+        isHitting = true;
+        hitAnimationProgress = 0;
+        AudioSys.playHit();
+
+        // Cek rumah terdekat
+        let closestHouse = null;
+        let minDist = 18; // Jangkauan pukulan diperbesar
+
+        houses.forEach(house => {
+            if(house.isAwake) return; 
+            const dx = house.position.x - camera.position.x;
+            const dz = house.position.z - camera.position.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+            if(dist < minDist) { minDist = dist; closestHouse = house; }
+        });
+
+        if(closestHouse) {
+            closestHouse.isAwake = true;
+            closestHouse.window.material = closestHouse.matOn; // Lampu menyala!
+            
+            score++;
+            scoreText.innerText = `Warga: ${score}`;
+            
+            // Animasi Notifikasi
+            wakeNoti.style.opacity = 1;
+            wakeNoti.style.transform = `translate(-50%, -80%) scale(1.3)`;
+            setTimeout(() => {
+                wakeNoti.style.opacity = 0;
+                wakeNoti.style.transform = `translate(-50%, -50%) scale(1)`;
+            }, 1000);
+
+            // Warga tidur lagi setelah beberapa saat
+            setTimeout(() => {
+                if(gameActive) {
+                    closestHouse.isAwake = false;
+                    closestHouse.window.material = closestHouse.matOff;
+                }
+            }, 8000 + Math.random() * 5000);
+        }
+    }
+
+    function startGame() {
+        AudioSys.init();
+        score = 0;
+        timeLeft = 60;
+        scoreText.innerText = `Warga: ${score}`;
+        timerText.innerText = `Imsak: ${timeLeft}s`;
+        
+        camera.position.set(0, 1.6, 80);
+        camera.rotation.set(0, 0, 0);
+
+        houses.forEach(h => {
+            h.isAwake = false;
+            h.window.material = h.matOff;
+        });
+
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        
+        uiLayer.style.display = 'block';
+        touchControls.style.display = 'block'; // Tampilkan kontrol HP
+        gameActive = true;
+        
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if(!gameActive) return;
+            timeLeft--;
+            timerText.innerText = `Imsak: ${timeLeft}s`;
+            if (timeLeft <= 0) endGame();
+        }, 1000);
+    }
+
+    function endGame() {
+        gameActive = false;
+        clearInterval(timerInterval);
+        document.getElementById('final-stats').innerText = `Alhamdulillah, kamu berhasil membangunkan ${score} rumah warga!`;
+        document.getElementById('game-over-screen').classList.remove('hidden');
+        uiLayer.style.display = 'none';
+        touchControls.style.display = 'none';
+    }
+
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('restart-btn').addEventListener('click', startGame);
+
+    // --- LOOP UTAMA (ANIMASI) ---
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const time = performance.now();
+        const delta = Math.min((time - prevTime) / 1000, 0.1); // Batasi delta agar tidak tembus dinding saat ngelag
+        prevTime = time;
+
+        if (gameActive) {
+            // Kalkulasi Arah Berjalan
+            const euler = new THREE.Euler(0, camera.rotation.y, 0, 'YXZ');
+            const direction = new THREE.Vector3(0, 0, -1).applyEuler(euler);
+            const right = new THREE.Vector3(1, 0, 0).applyEuler(euler);
+            
+            const moveVec = new THREE.Vector3();
+            const speed = 15.0; // Kecepatan jalan
+
+            // Input dari Joystick HP
+            if(joyY !== 0) moveVec.addScaledVector(direction, -joyY); // Maju Mundur
+            if(joyX !== 0) moveVec.addScaledVector(right, joyX); // Kiri Kanan
+
+            // Input dari Keyboard PC (Fallback)
+            if(keys.w) moveVec.addScaledVector(direction, 1);
+            if(keys.s) moveVec.addScaledVector(direction, -1);
+            if(keys.a) moveVec.addScaledVector(right, -1);
+            if(keys.d) moveVec.addScaledVector(right, 1);
+
+            if(moveVec.lengthSq() > 0) moveVec.normalize(); // Biar jalan diagonal gak lebih cepat
+
+            // Terapkan pergerakan
+            camera.position.x += moveVec.x * speed * delta;
+            camera.position.z += moveVec.z * speed * delta;
+
+            // Batas Dunia / Tembok
+            if (camera.position.x < -9) camera.position.x = -9;
+            if (camera.position.x > 9) camera.position.x = 9;
+            if (camera.position.z < -95) camera.position.z = -95;
+            if (camera.position.z > 95) camera.position.z = 95;
+
+            // Efek Kamera Jalan (Head Bobbing)
+            const isMoving = moveVec.lengthSq() > 0;
+            if (isMoving) {
+                headBobTimer += delta * 12;
+                camera.position.y = 1.6 + Math.sin(headBobTimer) * 0.1; // Goyangan naik turun
+            } else {
+                camera.position.y += (1.6 - camera.position.y) * 0.1;
+                headBobTimer = 0;
+            }
+
+            // Animasi Pukul Beduk
+            if (isHitting) {
+                hitAnimationProgress += delta * 20;
+                if (hitAnimationProgress >= Math.PI) {
+                    isHitting = false;
+                    alatGroup.rotation.set(0.2, -0.5, 0);
+                } else {
+                    const swing = Math.sin(hitAnimationProgress);
+                    alatGroup.rotation.z = swing * 0.6;
+                    alatGroup.rotation.x = 0.2 - (swing * 0.4);
+                }
+            } else if (isMoving) {
+                // Alat ikut bergoyang saat jalan
+                alatGroup.position.y = -0.3 + Math.sin(headBobTimer/2) * 0.02;
+            }
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    // Inisialisasi
+    window.onload = () => {
+        init3D();
+        animate();
+    };
+
+</script>
+</body>
+</html>
+
+<html lang="id">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>Sahur Simulator 3D - Mobile Edition</title>
+
+    <style>
+
+        body {
+
+            margin: 0;
+
+            overflow: hidden;
+
+            background-color: #000;
+
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+            touch-action: none; /* Mencegah layar ter-scroll di HP */
+
+            user-select: none;
